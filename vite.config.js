@@ -8,8 +8,14 @@ export default defineConfig({
     include: ['@mediapipe/tasks-vision']
   },
   build: {
-    outDir: 'build', // 指定输出目录
+    outDir: 'build',
     emptyOutDir: true,
   },
-  base: './', // 设置相对路径，适合 GitHub Pages 部署
+  base: './',
+  server: {
+    headers: {
+      'Cross-Origin-Opener-Policy': 'same-origin',
+      'Cross-Origin-Embedder-Policy': 'require-corp'
+    }
+  }
 });
