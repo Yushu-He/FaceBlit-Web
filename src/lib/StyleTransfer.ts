@@ -1269,7 +1269,7 @@ export class StyleTransfer {
   }
 
   async getStylizedImage(imageCanvas: HTMLCanvasElement, imageLandmarks: NormalizedLandmark[][], styleData: any){
-    const targetImageData = imageCanvas.getContext('2d').getImageData(0, 0, imageCanvas.width, imageCanvas.height);
+    const targetImageData = imageCanvas.getContext('2d')!.getImageData(0, 0, imageCanvas.width, imageCanvas.height);
     const targetlandmarksPoints = landmarksToPoints(imageLandmarks[0], targetImageData.width, targetImageData.height);
     const stylelandmarksPoints = landmarksToPoints(styleData.landmarks[0], targetImageData.width, targetImageData.height);
     const targetPosGuide = this.MLSDeformation(targetImageData, stylelandmarksPoints, targetlandmarksPoints);
@@ -1282,10 +1282,10 @@ export class StyleTransfer {
     const targetFaceMask = this.getSkinMask(targetImageData, targetlandmarksPoints);
 
     // -------------------------Alpha Blending-------------------------
-    const alphaBlendImageData = this.alphaBlendFG_BG(stylelizedImageData, targetImageData, targetFaceMask, 25.0);
+    // const alphaBlendImageData = this.alphaBlendFG_BG(stylelizedImageData, targetImageData, targetFaceMask, 25.0);
 
     const ctx = imageCanvas.getContext('2d');
-    ctx.putImageData(alphaBlendImageData, 0, 0);
+    ctx!.putImageData(stylelizedImageData, 0, 0);
   }
 
 //     // Initialize WebGPU

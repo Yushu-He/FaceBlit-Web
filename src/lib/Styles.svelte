@@ -19,6 +19,10 @@
   export let cropParams: { sx: number; sy: number; sWidth: number; sHeight: number } = { sx: 0, sy: 0, sWidth: 0, sHeight: 0 };
 
   $: if (cropParams.sx !== 0 || cropParams.sy !== 0 || cropParams.sWidth !== 0 || cropParams.sHeight !== 0) {
+    if (cropParams.sWidth > 768) {
+      cropParams.sWidth = 768;
+      cropParams.sHeight = 1024;
+    }
     if (!loadStyles(cropParams)) {
       console.log('Error adding styles');
     }
