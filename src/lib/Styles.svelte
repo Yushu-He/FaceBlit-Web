@@ -17,6 +17,8 @@
 
   let faceLandmarker: FaceLandmarker | null = null;
 
+  let loadingStates: { [key: string]: boolean } = {};
+
   export let stylesLoaded: (allFinished: boolean) => void = () => {};
   export let styleSelected: (styleName: string, styleData: any) => void = () => {};
 
@@ -33,7 +35,7 @@
       runningMode: 'IMAGE',
       numFaces: 1,
     });
-  
+
     await Promise.all(stylesListFull.map(async (styleName) => {
       await loadSingleStyle(styleName);
     }));
@@ -56,16 +58,13 @@
     return allFinished;
   }
 
-
   async function addSingleStyle(styleName: string): Promise<boolean> {
     try {
       console.log('Processing style:', styleName);
 
-      // Load the style image
       const image = new Image();
       image.src = `./assets/styles/style_${styleName}_480x640.png`;
       await image.decode();
-      // get the image data
       const canvas = document.createElement('canvas');
       canvas.width = image.width;
       canvas.height = image.height;
@@ -82,7 +81,6 @@
         console.log('landmarksArray:', landmarksArray);
 
         const resizedBlob = await ImageDataToBlob(ImageData, 'image/png');
-        // Save all data to IndexedDB
         await db.saveStyleData(styleName, {
           resizedImage: resizedBlob,
           lookUpCube: lutArray.buffer,
@@ -123,7 +121,6 @@
       if (!response.ok) {
         throw new Error(`Failed to load lookup cube from ${fileName}: ${response.status} ${response.statusText}`);
       }
-
       const arrayBuffer = await response.arrayBuffer();
       const data = new Uint16Array(arrayBuffer);
       console.log('Data for', styleName, data);
@@ -189,10 +186,12 @@
 
   async function handleStyleDownload(styleName: string) {
     if (!stylesDataList[styleName]) {
+      loadingStates[styleName] = true;
       const success = await addSingleStyle(styleName);
       if (success) {
         await loadSingleStyle(styleName);
       }
+      loadingStates[styleName] = false;
     }
   }
 </script>
@@ -249,6 +248,21 @@
     border-radius: 4px;
     cursor: pointer;
   }
+
+  /* Spinner styles */
+  .spinner {
+    width: 32px;
+    height: 32px;
+    border: 4px solid #ffffff;
+    border-top: 4px solid transparent;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+  }
+
+  @keyframes spin {
+    from {transform: rotate(0deg);}
+    to {transform: rotate(360deg);}
+  }
 </style>
 
 <div class="grid">
@@ -256,27 +270,38 @@
     <div
       class="style-item {selectedStyle === styleName ? 'selected' : ''}"
     >
-      <button type="button" on:click={() => {
-        if (stylesDataList[styleName]) {
-          selectStyle(styleName);
-        } else {
-          console.warn('Style data not available:', styleName);
-        }
-      }} aria-label={`Select style ${styleName}`}>
+      <button
+        type="button"
+        on:click={() => {
+          if (stylesDataList[styleName]) {
+            selectStyle(styleName);
+          } else {
+            console.warn('Style data not available:', styleName);
+          }
+        }}
+        aria-label={`Select style ${styleName}`}
+      >
         <img src={`./assets/styles/style_${styleName}_480x640.png`} alt={styleName} />
       </button>
 
       <span>{styleName}</span>
 
+      <!-- If style data not loaded yet, show either download icon or spinner if loading -->
       {#if !stylesDataList[styleName]}
-        <button
-          class="download-overlay"
-          type="button"
-          on:click={(e) => { e.stopPropagation(); handleStyleDownload(styleName); }}
-          aria-label={`Download style ${styleName}`}
-        >
-          ⬇
-        </button>
+        {#if loadingStates[styleName]}
+          <div class="download-overlay">
+            <div class="spinner"></div>
+          </div>
+        {:else}
+          <button
+            class="download-overlay"
+            type="button"
+            on:click={(e) => { e.stopPropagation(); handleStyleDownload(styleName); }}
+            aria-label={`Download style ${styleName}`}
+          >
+            ⬇
+          </button>
+        {/if}
       {/if}
     </div>
   {/each}

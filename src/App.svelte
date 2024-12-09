@@ -133,6 +133,11 @@
     for (let i = 0; i < landmarks.length; i++) {
       landmarksArray[i * 2] = Math.round(landmarks[i].x * WIDTH);
       landmarksArray[i * 2 + 1] = Math.round(landmarks[i].y * HEIGHT);
+      if (landmarksArray[i * 2] < 0 || landmarksArray[i * 2] >= WIDTH
+        || landmarksArray[i * 2 + 1] < 0 || landmarksArray[i * 2 + 1] >= HEIGHT
+      ) {
+        return null;
+      }
     }
     return landmarksArray;
   }
@@ -191,8 +196,7 @@
       if (results.faceLandmarks && results.faceLandmarks.length > 0) {
         const landmarks_extracted = mp2dlib.transformLandmarks(results.faceLandmarks);
         const targetLandmarksArray = transformLandmarksToInt32Array(landmarks_extracted[0]);
-        if (selectedStyleName && selectedStyleData!.landmarksArray!.length > 0) {
-          
+        if (selectedStyleName && selectedStyleData!.landmarksArray!.length > 0 && targetLandmarksArray) {
           if (selectedStyleName !== lastLoadName) {
             lastLoadName = selectedStyleName;
             wasmModule.HEAPU8.set(selectedStyleData.resizedImage.data, styleP.styleImagep);
@@ -271,6 +275,7 @@
     width: auto;
     height: 100%;
     border-radius: 60px;
+    transform: scaleX(-1);
   }
   .hidden {
     display: none;
