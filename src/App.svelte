@@ -242,15 +242,89 @@
 }
 </script>
 
+
 <main>
-  <video bind:this="{videoElement}" style="display: none;" aria-hidden="true"></video>
-  <canvas bind:this="{canvasElement}"></canvas>
-  <Styles onStyleSelected={handleStyleSelected} cropParams={window.cropParams}/>
+  <header>
+    <h1>EECS 442: Computer Vision Project</h1>
+    <p>
+      This project demonstrates real-time face stylization using WebAssembly and MediaPipe Vision Tasks.
+    </p>
+  </header>
+  <section class="content">
+    <div class="canvas-container">
+      <video bind:this="{videoElement}" style="display: none;" aria-hidden="true"></video>
+      <canvas bind:this="{canvasElement}"></canvas>
+    </div>
+    <Styles onStyleSelected={handleStyleSelected} cropParams={window.cropParams}/>
+  </section>
+  <footer>
+    <p>Project by Yushu He, Ruiqi He, Wentao Wei, Shihui Sun | EECS 442, Winter 2024</p>
+  </footer>
 </main>
 
 <style>
+  /* General Styles */
+  main {
+    font-family: Arial, sans-serif;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: space-between;
+    height: 100vh;
+    padding: 0;
+    margin: 0;
+    background: linear-gradient(to bottom, #1e3c72, #2a5298); /* Fancy gradient background */
+    color: #fff;
+    text-align: center;
+    width: 100%;
+  }
+
+  header {
+    padding: 10px 20px;
+  }
+
+  h1 {
+    font-size: 2rem;
+    margin: 0;
+    color: #ffd700; /* Gold color for title */
+  }
+
+  p {
+    font-size: 1rem;
+    margin-top: 5px;
+    max-width: 600px;
+    line-height: 1.5;
+  }
+
+  .content {
+    flex-grow: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 20px;
+  }
+
+  .canvas-container {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255, 255, 255, 0.1); /* Semi-transparent background for canvas */
+    padding: 10px;
+    border-radius: 10px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  }
+
   canvas {
-    width: auto;
-    height: 100%;
+    border: 2px solid #ffffff;
+    border-radius: 8px;
+    max-width: 90%;
+    max-height: 80vh; /* Ensures canvas fits within the viewport */
+  }
+
+  footer {
+    padding: 10px;
+    font-size: 0.9rem;
+    color: #ddd;
   }
 </style>
