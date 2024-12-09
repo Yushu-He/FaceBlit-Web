@@ -79,7 +79,7 @@
       wasmModule = await Module.default({
         locateFile: (path) => {
           if (path.endsWith('.wasm')) {
-            return '/wasm/face_blit.wasm';
+            return './wasm/face_blit.wasm';
           }
           return path;
         },
