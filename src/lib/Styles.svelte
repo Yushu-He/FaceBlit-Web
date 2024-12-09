@@ -1,25 +1,27 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { MP2Dlib } from './MP2Dlib.ts';
-  import { FaceLandmarker, FilesetResolver,  DrawingUtils, type NormalizedLandmark } from '@mediapipe/tasks-vision';
+  import { FaceLandmarker, FilesetResolver, type NormalizedLandmark } from '@mediapipe/tasks-vision';
   import { DB } from './Utils.ts';
   let stylesList = ['het', 'watercolorgirl'];
   let stylesDataList = {};
   let selectedStyle = '';
 
+  const WIDTH = 480;
+  const HEIGHT = 640;
+
   const db = new DB();
   const mp2dlib = new MP2Dlib();
 
   let faceLandmarker: FaceLandmarker | null = null;
-  let canvasElement: HTMLCanvasElement | null = null;
 
   export let onStyleSelected: (styleName: string, styleData: any) => void = () => {};
   export let cropParams: { sx: number; sy: number; sWidth: number; sHeight: number } = { sx: 0, sy: 0, sWidth: 0, sHeight: 0 };
 
   $: if (cropParams.sx !== 0 || cropParams.sy !== 0 || cropParams.sWidth !== 0 || cropParams.sHeight !== 0) {
-    if (cropParams.sWidth > 768) {
-      cropParams.sWidth = 768;
-      cropParams.sHeight = 1024;
+    if (cropParams.sWidth > WIDTH) {
+      cropParams.sWidth = WIDTH;
+      cropParams.sHeight = HEIGHT;
     }
     if (!loadStyles(cropParams)) {
       console.log('Error adding styles');
@@ -64,7 +66,7 @@
 
       // Load the style image
       const image = new Image();
-      image.src = `/assets/styles/style_${styleName}.png`;
+      image.src = `/assets/styles/style_${styleName}_480x640.png`;
       await image.decode();
       // get the image data, no resize needed
       const canvas = document.createElement('canvas');
@@ -127,7 +129,7 @@
   // Assuming you have initialized your WebAssembly module and have access to it as `wasmModule`
   async function loadLookUpCube(styleName: string): Promise<Uint16Array> {
     // Construct the file path based on the style name
-    const fileName = `/assets/styles/lut_${styleName}.bytes`;
+    const fileName = `/assets/styles/lut_${styleName}_480x640.bytes`;
 
     try {
       // Fetch the binary file
@@ -224,8 +226,8 @@
   function transformLandmarksToInt32Array(landmarks: NormalizedLandmark[]): Int32Array {
     const landmarksArray = new Int32Array(landmarks.length * 2);
     for (let i = 0; i < landmarks.length; i++) {
-      landmarksArray[i * 2] = Math.round(landmarks[i].x * 768);
-      landmarksArray[i * 2 + 1] = Math.round(landmarks[i].y * 1024);
+      landmarksArray[i * 2] = Math.round(landmarks[i].x * WIDTH);
+      landmarksArray[i * 2 + 1] = Math.round(landmarks[i].y * HEIGHT);
     }
     return landmarksArray;
   }

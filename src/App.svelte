@@ -5,10 +5,8 @@
   import Styles from './lib/Styles.svelte';
   import { MP2Dlib } from './lib/MP2Dlib.ts';
 
-  const CUBE_SIZE = 256;
-  const WIDTH = 768;
-  const HEIGHT = 1024;
-  const LANDMARKS_SIZE = 68;
+  const WIDTH = 480;
+  const HEIGHT = 640;
 
   let videoElement: HTMLVideoElement;
   let canvasElement: HTMLCanvasElement;
@@ -69,7 +67,7 @@
   onMount(async () => {
     // Load wasm module
     try {
-      const Module = await import('../public/wasm/face_blit.js');
+      const Module = await import('./lib/face_blit.js');
 
       wasmModule = await Module.default({
         locateFile: (path) => {
@@ -126,8 +124,8 @@
   function transformLandmarksToInt32Array(landmarks: NormalizedLandmark[]): Int32Array {
     const landmarksArray = new Int32Array(landmarks.length * 2);
     for (let i = 0; i < landmarks.length; i++) {
-      landmarksArray[i * 2] = Math.round(landmarks[i].x * 768);
-      landmarksArray[i * 2 + 1] = Math.round(landmarks[i].y * 1024);
+      landmarksArray[i * 2] = Math.round(landmarks[i].x * WIDTH);
+      landmarksArray[i * 2 + 1] = Math.round(landmarks[i].y * HEIGHT);
     }
     return landmarksArray;
   }
@@ -135,8 +133,7 @@
   async function startCamera() {
     const stream = await navigator.mediaDevices.getUserMedia({
       video: {
-      width: { ideal: 1920 },
-      height: { ideal: 1080 },
+      height: { ideal: 720 },
       facingMode: 'user'
       }
     });
