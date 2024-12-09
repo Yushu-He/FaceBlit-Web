@@ -1,9 +1,14 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { FaceLandmarker, FilesetResolver, DrawingUtils } from '@mediapipe/tasks-vision';
+  import type { NormalizedLandmark } from '@mediapipe/tasks-vision';
   import Styles from './lib/Styles.svelte';
   import { MP2Dlib } from './lib/MP2Dlib.ts';
-  import { StyleTransfer } from './lib/StyleTransfer.ts';
+
+  const CUBE_SIZE = 256;
+  const WIDTH = 768;
+  const HEIGHT = 1024;
+  const LANDMARKS_SIZE = 68;
 
   let videoElement: HTMLVideoElement;
   let canvasElement: HTMLCanvasElement;
@@ -15,14 +20,45 @@
       sWidth: 0,
       sHeight: 0,
     },
-    globalScale: 1,
   }
 
   let selectedStyleName = '';
-  let selectedStyleData = {};
+  let lastLoadName = '';
+  let selectedStyleData: {
+    resizedImage: ImageData,
+    landmarksArray: Int32Array,
+    lookUpCube: Uint16Array
+  } = {
+    resizedImage: new ImageData(1, 1),
+    landmarksArray: new Int32Array(),
+    lookUpCube: new Uint16Array()
+  };
 
   const mp2dlib = new MP2Dlib();
-  const styleTransfer = new StyleTransfer();
+  let loeaded = false;
+  let api = {
+    create_image_buffer: (): number => {return 0},
+    destroy_image_buffer: (p: number) => {},
+    create_landmarks_buffer: (): number => {return 0},
+    destroy_landmarks_buffer: (p: number) => {},
+    create_lookUpCube_buffer: (): number => {return 0},
+    destroy_lookUpCube_buffer: (p: number) => {},
+    load_style: (styleImagep: number, styleLandmarksp: number, lookUpCubep: number): number => {return 0},
+    stylizeImage: (targetImagep: number, targetLandmarksp: number, NNF_patchsize: number) => {},
+  };
+
+  let wasmModule: any;
+
+  let styleP = {
+    styleImagep: 0,
+    styleLandmarksp: 0,
+    lookUpCubep: 0,
+  }
+
+  let targetP = {
+    targetImagep: 0,
+    targetLandmarksp: 0,
+  }
 
   function handleStyleSelected(styleName: string, styleData: any) {
     selectedStyleName = styleName;
@@ -31,6 +67,44 @@
   }
 
   onMount(async () => {
+    // Load wasm module
+    try {
+      const Module = await import('../public/wasm/face_blit.js');
+
+      wasmModule = await Module.default({
+        locateFile: (path) => {
+          if (path.endsWith('.wasm')) {
+            return '/wasm/face_blit.wasm';
+          }
+          return path;
+        },
+      });
+
+      api = {
+        create_image_buffer: wasmModule.cwrap('create_image_buffer', 'number', []),
+        destroy_image_buffer: wasmModule.cwrap('destroy_image_buffer', '', ['number']),
+        create_landmarks_buffer: wasmModule.cwrap('create_landmarks_buffer', 'number', []),
+        destroy_landmarks_buffer: wasmModule.cwrap('destroy_landmarks_buffer', '', ['number']),
+        create_lookUpCube_buffer: wasmModule.cwrap('create_lookUpCube_buffer', 'number', []),
+        destroy_lookUpCube_buffer: wasmModule.cwrap('destroy_lookUpCube_buffer', '', ['number']),
+        load_style: wasmModule.cwrap('load_style', 'number', ['number', 'number', 'number']),
+        stylizeImage: wasmModule.cwrap('stylizeImage', '', ['number', 'number', 'number']),
+      };
+      loeaded = true;
+    } catch (e) {
+      console.error('Error loading face_blit.js:', e);
+    }
+
+    // create style buffers
+    styleP.styleImagep = api.create_image_buffer();
+    styleP.styleLandmarksp = api.create_landmarks_buffer(); 
+    styleP.lookUpCubep = api.create_lookUpCube_buffer();
+
+    // create target buffers
+    targetP.targetImagep = api.create_image_buffer();
+    targetP.targetLandmarksp = api.create_landmarks_buffer();
+
+    // Load face landmark model
     const filesetResolver = await FilesetResolver.forVisionTasks(
       'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm'
     );
@@ -45,53 +119,52 @@
       numFaces: 1,
     });
 
+    // Start camera
     startCamera();
   });
 
+  function transformLandmarksToInt32Array(landmarks: NormalizedLandmark[]): Int32Array {
+    const landmarksArray = new Int32Array(landmarks.length * 2);
+    for (let i = 0; i < landmarks.length; i++) {
+      landmarksArray[i * 2] = Math.round(landmarks[i].x * 768);
+      landmarksArray[i * 2 + 1] = Math.round(landmarks[i].y * 1024);
+    }
+    return landmarksArray;
+  }
+
   async function startCamera() {
-    const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: {
+      width: { ideal: 1920 },
+      height: { ideal: 1080 },
+      facingMode: 'user'
+      }
+    });
     videoElement.srcObject = stream;
     videoElement.play();
 
     videoElement.onloadedmetadata = () => {
-      // set target resolution
-      const desiredWidth = 768;
-      const desiredHeight = 1024;
-
       // get original video resolution
       const videoWidth = videoElement.videoWidth;
       const videoHeight = videoElement.videoHeight;
-      let sx: number, sy: number, sWidth: number, sHeight: number;
       // calculate resolution ratio crop parameters
       const videoAspectRatio = videoWidth / videoHeight;
-      const desiredAspectRatio = desiredWidth / desiredHeight;
+      const desiredAspectRatio = WIDTH / HEIGHT;
 
       if (videoAspectRatio > desiredAspectRatio) {
-        sHeight = videoHeight;
-        sWidth = videoHeight * desiredAspectRatio;
-        sx = (videoWidth - sWidth) / 2;
-        sy = 0;
+        window.cropParams.sHeight = videoHeight;
+        window.cropParams.sWidth = videoHeight * desiredAspectRatio;
+        window.cropParams.sx = (videoWidth - window.cropParams.sWidth) / 2;
+        window.cropParams.sy = 0;
       } else {
-        sWidth = videoWidth;
-        sHeight = videoWidth / desiredAspectRatio;
-        sx = 0;
-        sy = (videoHeight - sHeight) / 2;
+        window.cropParams.sWidth = videoWidth;
+        window.cropParams.sHeight = videoWidth / desiredAspectRatio;
+        window.cropParams.sx = 0;
+        window.cropParams.sy = (videoHeight - window.cropParams.sHeight) / 2;
       }
 
-      window.cropParams = { sx, sy, sWidth, sHeight };
-
-      const scaleX = sWidth / desiredWidth;
-      const scaleY = sHeight / desiredHeight;
-      const scalingFactor = Math.min(scaleX, scaleY);
-      window.globalScale = scalingFactor;
-
-      if (scalingFactor < 1) {
-        canvasElement.width = sWidth;
-        canvasElement.height = sHeight;
-      } else {
-        canvasElement.width = desiredWidth;
-        canvasElement.height = desiredHeight;
-      }
+      canvasElement.width = WIDTH;
+      canvasElement.height = HEIGHT;
 
       console.log(window.cropParams);
 
@@ -99,7 +172,7 @@
     };
 
   function detectFaces() {
-    const canvasCtx = canvasElement.getContext('2d');
+    const canvasCtx = canvasElement.getContext('2d', {willReadFrequently: true});
     const drawingUtils = new DrawingUtils(canvasCtx);
     const { sx, sy, sWidth, sHeight } = window.cropParams;
 
@@ -113,8 +186,35 @@
 
       if (results.faceLandmarks && results.faceLandmarks.length > 0) {
         const landmarks_extracted = mp2dlib.transformLandmarks(results.faceLandmarks);
-        if (selectedStyleName !== '' && selectedStyleData) {
-          styleTransfer.getStylizedImage(canvasElement, landmarks_extracted, selectedStyleData);
+        const targetLandmarksArray = transformLandmarksToInt32Array(landmarks_extracted[0]);
+        if (selectedStyleName && selectedStyleData!.landmarksArray!.length > 0) {
+          
+          if (selectedStyleName !== lastLoadName) {
+            lastLoadName = selectedStyleName;
+            wasmModule.HEAPU8.set(selectedStyleData.resizedImage.data, styleP.styleImagep);
+            wasmModule.HEAPU16.set(selectedStyleData.lookUpCube, styleP.lookUpCubep / 2);
+            wasmModule.HEAP32.set(selectedStyleData.landmarksArray, styleP.styleLandmarksp / 4);
+            const styleLoadWrong = await api.load_style(styleP.styleImagep, styleP.styleLandmarksp, styleP.lookUpCubep);
+            if (styleLoadWrong) {
+              console.error('Error loading style:', selectedStyleName);
+            }
+          }
+          // canvas image data
+          const targetImageData = canvasCtx.getImageData(0, 0, WIDTH, HEIGHT);
+          wasmModule.HEAPU8.set(targetImageData.data, targetP.targetImagep);
+          wasmModule.HEAP32.set(targetLandmarksArray, targetP.targetLandmarksp / 4);
+          await api.stylizeImage(targetP.targetImagep, targetP.targetLandmarksp, 0);
+
+          // set target image pointer data to canvas
+          const targetImageDataArray = new Uint8ClampedArray(wasmModule.HEAPU8.buffer, targetP.targetImagep, WIDTH * HEIGHT * 4);
+          const ReturntargetImageData = new ImageData(targetImageDataArray, WIDTH, HEIGHT);
+          // clean canvas
+          canvasCtx.clearRect(0, 0, WIDTH, HEIGHT);
+          // draw new image
+          canvasCtx.putImageData(ReturntargetImageData, 0, 0);
+        }
+        else {
+          drawingUtils.drawLandmarks(landmarks_extracted[0], { color: '#FF3030' , radius: 0.5 });
         }
         // for (const landmarks of landmarks_extracted) {
         //   drawingUtils.drawConnectors(

@@ -1,14 +1,12 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { StyleTransfer } from './StyleTransfer.ts';
   import { MP2Dlib } from './MP2Dlib.ts';
-  import { FaceLandmarker, FilesetResolver,  DrawingUtils } from '@mediapipe/tasks-vision';
+  import { FaceLandmarker, FilesetResolver,  DrawingUtils, type NormalizedLandmark } from '@mediapipe/tasks-vision';
   import { DB } from './Utils.ts';
   let stylesList = ['het', 'watercolorgirl'];
   let stylesDataList = {};
   let selectedStyle = '';
 
-  const styleTransfer = new StyleTransfer();
   const db = new DB();
   const mp2dlib = new MP2Dlib();
 
@@ -68,39 +66,30 @@
       const image = new Image();
       image.src = `/assets/styles/style_${styleName}.png`;
       await image.decode();
+      // get the image data, no resize needed
+      const canvas = document.createElement('canvas');
+      canvas.width = image.width;
+      canvas.height = image.height;
+      const ctx = canvas.getContext('2d');
+      ctx!.drawImage(image, 0, 0);
+      const ImageData = ctx!.getImageData(0, 0, image.width, image.height);
 
-      // Resize the style image
-      const resizedCanvas = styleTransfer.resizeImage(image, params.sWidth, params.sHeight);
-      const resizedImageData = resizedCanvas.getContext('2d')!.getImageData(0, 0, params.sWidth, params.sHeight);
-
-      // Compute the lookup cube
-      const stylePosGuide = styleTransfer.getGradient(params.sWidth, params.sHeight, false);
-      const styleAppGuide = styleTransfer.getAppGuide(resizedImageData, true);
-      // const lutBuffer = await styleTransfer.getLookUpCube(stylePosGuide, styleAppGuide);
-      const lutArray = await styleTransfer.getLookUpCubeCPUParallel(stylePosGuide, styleAppGuide);
+      const lutArray = await loadLookUpCube(styleName);
 
       // // Perform face landmark detection
-      const results = faceLandmarker!.detect(resizedCanvas);
+      const results = faceLandmarker!.detect(canvas);
       if (results.faceLandmarks && results.faceLandmarks.length > 0) {
         const landmarks = mp2dlib.transformLandmarks(results.faceLandmarks);
-        console.log('Landmarks:', landmarks);
+        const landmarksArray = transformLandmarksToInt32Array(landmarks[0]);
+        console.log('landmarksArray:', landmarksArray);
         // Convert canvases to Base64 strings for storage
-        const resizedBlob = await ImageDataToBlob(resizedImageData, 'image/png');
-        const gradientBlob = await ImageDataToBlob(stylePosGuide, 'image/png');
-        const appGuideBlob = await ImageDataToBlob(styleAppGuide, 'image/png');
-      //   // Convert LUT buffer to Base64 string
-      //   await lutBuffer.mapAsync(GPUMapMode.READ);
-      //   const lutArray = new Uint8Array(lutBuffer.getMappedRange());
-      //   const lutBase64 = btoa(String.fromCharCode(...lutArray));
-      //   lutBuffer.unmap();
+        const resizedBlob = await ImageDataToBlob(ImageData, 'image/png');
 
         // Save all data to IndexedDB
         await db.saveStyleData(styleName, {
           resizedImage: resizedBlob,
-          gradient: gradientBlob,
-          appGuide: appGuideBlob,
-          lookupCube: lutArray.buffer,
-          landmarks: landmarks,
+          lookUpCube: lutArray.buffer,
+          landmarksArray: landmarksArray.buffer,
         });
       } else {
         console.error('No landmarks detected.');
@@ -121,11 +110,12 @@
       if (data) {
         // Convert Base64 strings back to canvases
         data.resizedImage = await blobToImageData(data.resizedImage);
-        data.gradient = await blobToImageData(data.gradient);
-        data.appGuide = await blobToImageData(data.appGuide);
+
+        // Convert landmarks ArrayBuffer back to Int32Array
+        data.landmarksArray = new Int32Array(data.landmarksArray);
 
         // Convert lookupCube ArrayBuffer back to Uint16Array
-        data.lookupCube = new Uint16Array(data.lookupCube);
+        data.lookUpCube = new Uint16Array(data.lookUpCube);
         stylesDataList[styleName] = data;
         console.log('Style:', styleName, 'is loaded');
       }
@@ -133,6 +123,33 @@
       console.error('Error loading style:', error);
     }
   }
+
+  // Assuming you have initialized your WebAssembly module and have access to it as `wasmModule`
+  async function loadLookUpCube(styleName: string): Promise<Uint16Array> {
+    // Construct the file path based on the style name
+    const fileName = `/assets/styles/lut_${styleName}.bytes`;
+
+    try {
+      // Fetch the binary file
+      const response = await fetch(fileName);
+      
+      if (!response.ok) {
+        throw new Error(`Failed to load lookup cube from ${fileName}: ${response.status} ${response.statusText}`);
+      }
+
+      // Read the response as an ArrayBuffer
+      const arrayBuffer = await response.arrayBuffer();
+      const data = new Uint16Array(arrayBuffer);
+
+      console.log('Data:', data);
+      return data;
+      // If needed, you can return a success status or perform additional operations here
+    } catch (error) {
+      console.error(`Error loading lookup cube: ${error.message}`);
+      throw error; // Re-throw the error after logging
+    }
+  }
+
 
   // function canvasToBlob(canvas: HTMLCanvasElement, type: string): Promise<Blob> {
   //   return new Promise((resolve, reject) => {
@@ -202,6 +219,15 @@
   function selectStyle(styleName: string) {
     selectedStyle = styleName;
     onStyleSelected(styleName, stylesDataList[styleName]);
+  }
+
+  function transformLandmarksToInt32Array(landmarks: NormalizedLandmark[]): Int32Array {
+    const landmarksArray = new Int32Array(landmarks.length * 2);
+    for (let i = 0; i < landmarks.length; i++) {
+      landmarksArray[i * 2] = Math.round(landmarks[i].x * 768);
+      landmarksArray[i * 2 + 1] = Math.round(landmarks[i].y * 1024);
+    }
+    return landmarksArray;
   }
 </script>
 
