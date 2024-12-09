@@ -116,7 +116,7 @@
 
     faceLandmarker = await FaceLandmarker.createFromOptions(filesetResolver, {
       baseOptions: {
-        modelAssetPath: '/assets/models/face_landmarker.task',
+        modelAssetPath: './assets/models/face_landmarker.task',
         delegate: 'GPU',
       },
       outputFaceBlendshapes: false,

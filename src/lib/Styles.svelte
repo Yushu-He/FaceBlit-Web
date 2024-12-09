@@ -26,7 +26,7 @@
     );
     faceLandmarker = await FaceLandmarker.createFromOptions(filesetResolver, {
       baseOptions: {
-        modelAssetPath: '/assets/models/face_landmarker.task',
+        modelAssetPath: './assets/models/face_landmarker.task',
         delegate: 'GPU',
       },
       outputFaceBlendshapes: false,
@@ -63,7 +63,7 @@
 
       // Load the style image
       const image = new Image();
-      image.src = `/assets/styles/style_${styleName}_480x640.png`;
+      image.src = `./assets/styles/style_${styleName}_480x640.png`;
       await image.decode();
       // get the image data
       const canvas = document.createElement('canvas');
@@ -117,7 +117,7 @@
   }
 
   async function loadLookUpCube(styleName: string): Promise<Uint16Array> {
-    const fileName = `/assets/styles/lut_${styleName}_480x640.bytes`;
+    const fileName = `./assets/styles/lut_${styleName}_480x640.bytes`;
     try {
       const response = await fetch(fileName);
       if (!response.ok) {
@@ -263,7 +263,7 @@
           console.warn('Style data not available:', styleName);
         }
       }} aria-label={`Select style ${styleName}`}>
-        <img src={`/assets/styles/style_${styleName}_480x640.png`} alt={styleName} />
+        <img src={`./assets/styles/style_${styleName}_480x640.png`} alt={styleName} />
       </button>
 
       <span>{styleName}</span>
