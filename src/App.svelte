@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import { fade } from 'svelte/transition';
   import { FaceLandmarker, FilesetResolver, DrawingUtils } from '@mediapipe/tasks-vision';
   import type { NormalizedLandmark } from '@mediapipe/tasks-vision';
   import Styles from './lib/Styles.svelte';
@@ -7,6 +8,8 @@
 
   const WIDTH = 480;
   const HEIGHT = 640;
+
+  let loading = true;
 
   let videoElement: HTMLVideoElement;
   let canvasElement: HTMLCanvasElement;
@@ -33,7 +36,7 @@
   };
 
   const mp2dlib = new MP2Dlib();
-  let loeaded = false;
+  let apiLoaded = false;
   let api = {
     create_image_buffer: (): number => {return 0},
     destroy_image_buffer: (p: number) => {},
@@ -56,6 +59,10 @@
   let targetP = {
     targetImagep: 0,
     targetLandmarksp: 0,
+  }
+
+  function handleStylesLoaded(allFinished: boolean) {
+    loading = !allFinished;
   }
 
   function handleStyleSelected(styleName: string, styleData: any) {
@@ -88,7 +95,7 @@
         load_style: wasmModule.cwrap('load_style', 'number', ['number', 'number', 'number']),
         stylizeImage: wasmModule.cwrap('stylizeImage', '', ['number', 'number', 'number']),
       };
-      loeaded = true;
+      apiLoaded = true;
     } catch (e) {
       console.error('Error loading face_blit.js:', e);
     }
@@ -239,15 +246,33 @@
 }
 </script>
 
+
 <main>
-  <video bind:this="{videoElement}" style="display: none;" aria-hidden="true"></video>
-  <canvas bind:this="{canvasElement}"></canvas>
-  <Styles onStyleSelected={handleStyleSelected} cropParams={window.cropParams}/>
+  <div class="loading-page" class:hidden={!loading} transition:fade={{ duration: 1000 }}>
+    <h1>Loading...</h1>
+  </div>
+  <div class="app page" class:hidden={loading} transition:fade={{ duration: 1000 }}>
+    <h1>EECS 442 Project: Face Blit Web</h1>
+    <p><a href="https://github.com/Yushu-He/FaceBlit-Web" target="_blank" class="github-link" style="text-decoration: none; color: inherit;">
+      <i class="fa fa-github" style="font-size: 24px; margin-right: 8px;"></i> View on GitHub
+    </a></p>
+    <video bind:this={videoElement} style="display: none;" aria-hidden="true"></video>
+    <canvas bind:this={canvasElement}></canvas>
+    <h1>Styles</h1>
+    <Styles 
+      stylesLoaded={handleStylesLoaded}
+      styleSelected={handleStyleSelected}
+    />
+  </div>
 </main>
 
 <style>
   canvas {
     width: auto;
     height: 100%;
+    border-radius: 60px;
+  }
+  .hidden {
+    display: none;
   }
 </style>

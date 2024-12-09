@@ -3,8 +3,10 @@
   import { MP2Dlib } from './MP2Dlib.ts';
   import { FaceLandmarker, FilesetResolver, type NormalizedLandmark } from '@mediapipe/tasks-vision';
   import { DB } from './Utils.ts';
+
+  let stylesListFull = ['het', 'watercolorgirl', 'bronzestatue', 'charcoalman', 'expressive', 'frank', 'girl', 'illegalbeauty', 'ken', 'laurinbust', 'lincolnbust', 'malevich', 'oilman', 'oldman', 'prisma', 'stonebust', 'woodenmask'];
   let stylesList = ['het', 'watercolorgirl'];
-  let stylesDataList = {};
+  let stylesDataList: { [key: string]: any } = {};
   let selectedStyle = '';
 
   const WIDTH = 480;
@@ -15,18 +17,8 @@
 
   let faceLandmarker: FaceLandmarker | null = null;
 
-  export let onStyleSelected: (styleName: string, styleData: any) => void = () => {};
-  export let cropParams: { sx: number; sy: number; sWidth: number; sHeight: number } = { sx: 0, sy: 0, sWidth: 0, sHeight: 0 };
-
-  $: if (cropParams.sx !== 0 || cropParams.sy !== 0 || cropParams.sWidth !== 0 || cropParams.sHeight !== 0) {
-    if (cropParams.sWidth > WIDTH) {
-      cropParams.sWidth = WIDTH;
-      cropParams.sHeight = HEIGHT;
-    }
-    if (!loadStyles(cropParams)) {
-      console.log('Error adding styles');
-    }
-  }
+  export let stylesLoaded: (allFinished: boolean) => void = () => {};
+  export let styleSelected: (styleName: string, styleData: any) => void = () => {};
 
   onMount(async () => {
     const filesetResolver = await FilesetResolver.forVisionTasks(
@@ -41,26 +33,31 @@
       runningMode: 'IMAGE',
       numFaces: 1,
     });
+  
+    await Promise.all(stylesListFull.map(async (styleName) => {
+      await loadSingleStyle(styleName);
+    }));
+    stylesLoaded(await loadStyles());
   });
 
-  function loadStyles(params: { sx: number; sy: number; sWidth: number; sHeight: number }): boolean {
+  async function loadStyles(): Promise<boolean> {
     let allFinished = true;
-    stylesList.forEach(async (styleName) => {
-      await loadSingleStyle(styleName);
-      // if is undefined, then add the style
-      if (!stylesDataList[styleName]) {
+    await Promise.all(stylesList.map(async (styleName) => {
+      if (stylesDataList[styleName]) {
+        return;
+      } else {
         console.log('Style:', styleName, 'is not cached, begin processing');
-        if (!addSingleStyle(styleName, params)) {
+        if (!await addSingleStyle(styleName)) {
           allFinished = false;
         }
         await loadSingleStyle(styleName);
       }
-    });
+    }));
     return allFinished;
   }
 
 
-  async function addSingleStyle(styleName: string, params: { sx: number; sy: number; sWidth: number; sHeight: number }): Promise<boolean> {
+  async function addSingleStyle(styleName: string): Promise<boolean> {
     try {
       console.log('Processing style:', styleName);
 
@@ -68,7 +65,7 @@
       const image = new Image();
       image.src = `/assets/styles/style_${styleName}_480x640.png`;
       await image.decode();
-      // get the image data, no resize needed
+      // get the image data
       const canvas = document.createElement('canvas');
       canvas.width = image.width;
       canvas.height = image.height;
@@ -78,15 +75,13 @@
 
       const lutArray = await loadLookUpCube(styleName);
 
-      // // Perform face landmark detection
       const results = faceLandmarker!.detect(canvas);
       if (results.faceLandmarks && results.faceLandmarks.length > 0) {
         const landmarks = mp2dlib.transformLandmarks(results.faceLandmarks);
         const landmarksArray = transformLandmarksToInt32Array(landmarks[0]);
         console.log('landmarksArray:', landmarksArray);
-        // Convert canvases to Base64 strings for storage
-        const resizedBlob = await ImageDataToBlob(ImageData, 'image/png');
 
+        const resizedBlob = await ImageDataToBlob(ImageData, 'image/png');
         // Save all data to IndexedDB
         await db.saveStyleData(styleName, {
           resizedImage: resizedBlob,
@@ -110,60 +105,34 @@
     try {
       const data = await db.loadStyleData(styleName);
       if (data) {
-        // Convert Base64 strings back to canvases
         data.resizedImage = await blobToImageData(data.resizedImage);
-
-        // Convert landmarks ArrayBuffer back to Int32Array
         data.landmarksArray = new Int32Array(data.landmarksArray);
-
-        // Convert lookupCube ArrayBuffer back to Uint16Array
         data.lookUpCube = new Uint16Array(data.lookUpCube);
         stylesDataList[styleName] = data;
-        console.log('Style:', styleName, 'is loaded');
+        console.log('Style:', styleName, 'is loaded from indexedDB');
       }
     } catch (error) {
-      console.error('Error loading style:', error);
+      console.error('Error loading style:', styleName, error);
     }
   }
 
-  // Assuming you have initialized your WebAssembly module and have access to it as `wasmModule`
   async function loadLookUpCube(styleName: string): Promise<Uint16Array> {
-    // Construct the file path based on the style name
     const fileName = `/assets/styles/lut_${styleName}_480x640.bytes`;
-
     try {
-      // Fetch the binary file
       const response = await fetch(fileName);
-      
       if (!response.ok) {
         throw new Error(`Failed to load lookup cube from ${fileName}: ${response.status} ${response.statusText}`);
       }
 
-      // Read the response as an ArrayBuffer
       const arrayBuffer = await response.arrayBuffer();
       const data = new Uint16Array(arrayBuffer);
-
-      console.log('Data:', data);
+      console.log('Data for', styleName, data);
       return data;
-      // If needed, you can return a success status or perform additional operations here
     } catch (error) {
       console.error(`Error loading lookup cube: ${error.message}`);
-      throw error; // Re-throw the error after logging
+      throw error;
     }
   }
-
-
-  // function canvasToBlob(canvas: HTMLCanvasElement, type: string): Promise<Blob> {
-  //   return new Promise((resolve, reject) => {
-  //     canvas.toBlob((blob) => {
-  //       if (blob) {
-  //         resolve(blob);
-  //       } else {
-  //         reject(new Error('Failed to convert canvas to Blob.'));
-  //       }
-  //     }, type);
-  //   });
-  // }
 
   function ImageDataToBlob(imageData: ImageData, type: string): Promise<Blob> {
     return new Promise((resolve, reject) => {
@@ -181,24 +150,6 @@
       }, type);
     });
   }
-
-  // function blobToCanvas(blob: Blob): Promise<HTMLCanvasElement> {
-  //   return new Promise((resolve, reject) => {
-  //     const canvas = document.createElement('canvas');
-  //     const ctx = canvas.getContext('2d');
-  //     const img = new Image();
-  //     img.onload = () => {
-  //       canvas.width = img.width;
-  //       canvas.height = img.height;
-  //       ctx!.drawImage(img, 0, 0);
-  //       resolve(canvas);
-  //     };
-  //     img.onerror = (error) => {
-  //       reject(error);
-  //     };
-  //     img.src = URL.createObjectURL(blob);
-  //   });
-  // }
 
   function blobToImageData(blob: Blob): Promise<ImageData> {
     return new Promise((resolve, reject) => {
@@ -219,8 +170,12 @@
   }
 
   function selectStyle(styleName: string) {
-    selectedStyle = styleName;
-    onStyleSelected(styleName, stylesDataList[styleName]);
+    if (stylesDataList[styleName]) {
+      selectedStyle = styleName;
+      styleSelected(styleName, stylesDataList[styleName]);
+    } else {
+      console.warn('Style not loaded yet:', styleName);
+    }
   }
 
   function transformLandmarksToInt32Array(landmarks: NormalizedLandmark[]): Int32Array {
@@ -231,6 +186,15 @@
     }
     return landmarksArray;
   }
+
+  async function handleStyleDownload(styleName: string) {
+    if (!stylesDataList[styleName]) {
+      const success = await addSingleStyle(styleName);
+      if (success) {
+        await loadSingleStyle(styleName);
+      }
+    }
+  }
 </script>
 
 <style>
@@ -238,42 +202,82 @@
     display: flex;
     flex-wrap: wrap;
     gap: 16px;
+    justify-content: center;
   }
   .style-item {
+    position: relative;
     display: flex;
     flex-direction: column;
     align-items: center;
     cursor: pointer;
-    width: 100px;
+    width: 150px;
     border: 2px solid transparent;
     padding: 8px;
     border-radius: 8px;
-    transition: border 0.3s;
-  }
-  .style-item:hover {
-    border: 2px solid #ccc;
+    transition: outline 0.3s;
   }
   .style-item img {
-    width: 100px;
-    height: 100px;
+    width: 120px;
     object-fit: cover;
     border-radius: 4px;
   }
+  .style-item:hover {
+    outline: 2px solid rgb(63, 154, 211);
+    outline-offset: 2px;
+  }
+
+  .style-item:hover * {
+    outline: none;
+  }
   .selected.style-item {
-    border: 2px solid white;
+    outline: 2px solid rgb(63, 154, 211); 
+    outline-offset: 2px;
+  }
+
+  .download-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0,0,0,0.4);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    color: white;
+    font-size: 24px;
+    border-radius: 4px;
+    cursor: pointer;
   }
 </style>
 
 <div class="grid">
-  {#each stylesList as styleName}
-    <button
-      type="button"
+  {#each stylesListFull as styleName}
+    <div
       class="style-item {selectedStyle === styleName ? 'selected' : ''}"
-      on:click={() => selectStyle(styleName)}
     >
-      <img src={`/assets/styles/style_${styleName}.png`} alt={styleName} />
+      <button type="button" on:click={() => {
+        if (stylesDataList[styleName]) {
+          selectStyle(styleName);
+        } else {
+          console.warn('Style data not available:', styleName);
+        }
+      }} aria-label={`Select style ${styleName}`}>
+        <img src={`/assets/styles/style_${styleName}_480x640.png`} alt={styleName} />
+      </button>
+
       <span>{styleName}</span>
-    </button>
+
+      {#if !stylesDataList[styleName]}
+        <button
+          class="download-overlay"
+          type="button"
+          on:click={(e) => { e.stopPropagation(); handleStyleDownload(styleName); }}
+          aria-label={`Download style ${styleName}`}
+        >
+          ⬇
+        </button>
+      {/if}
+    </div>
   {/each}
 </div>
-
