@@ -256,14 +256,16 @@
     <div class="loading-circle"></div>
     <h1>Loading...</h1>
   </div>
-  <div class="app page" class:hidden={loading} transition:fade={{ duration: 1000 }}>
+  <div class="app-page" class:hidden={loading} transition:fade={{ duration: 1000 }}>
     <h1>EECS 442 Project: Face Blit Web</h1>
-    <p><a href="https://github.com/Yushu-He/FaceBlit-Web" target="_blank" class="github-link" style="text-decoration: none; color: inherit;">
-      <i class="fa fa-github" style="font-size: 24px; margin-right: 8px;"></i> View on GitHub
-    </a></p>
+    <p>
+      <a href="https://github.com/Yushu-He/FaceBlit-Web" target="_blank" class="github-link" style="text-decoration: none; color: inherit;">
+        <i class="fa fa-github" style="font-size: 24px; margin-right: 8px;"></i> View on GitHub
+      </a>
+    </p>
     <video bind:this={videoElement} playsinline autoplay muted style="display: none;" aria-hidden="true"></video>
     <canvas bind:this={canvasElement}></canvas>
-    <h1>Styles</h1>
+    <h2>Styles</h2>
     <Styles 
       stylesLoaded={handleStylesLoaded}
       styleSelected={handleStyleSelected}
@@ -273,8 +275,8 @@
 
 <style>
   canvas {
-    width: auto;
-    height: 100%;
+    max-width: 100%;
+    height: auto;
     border-radius: 60px;
     transform: scaleX(-1);
   }
@@ -297,6 +299,19 @@
   @keyframes spin {
     0% { transform: rotate(0deg); }
     100% { transform: rotate(360deg); }
+  }
+  .app-page {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 100%;
+    flex: 1;
+    overflow: hidden;
+  }
+  .github-link {
+    display: flex;
+    align-items: center;
+    margin-bottom: 20px;
   }
   .hidden {
     display: none;
