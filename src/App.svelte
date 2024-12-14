@@ -253,6 +253,7 @@
 
 <main>
   <div class="loading-page" class:hidden={!loading} transition:fade={{ duration: 1000 }}>
+    <div class="loading-circle"></div>
     <h1>Loading...</h1>
   </div>
   <div class="app page" class:hidden={loading} transition:fade={{ duration: 1000 }}>
@@ -276,6 +277,26 @@
     height: 100%;
     border-radius: 60px;
     transform: scaleX(-1);
+  }
+  .loading-page {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100vh;
+  }
+  .loading-circle {
+    width: 50px;
+    height: 50px;
+    border: 5px solid #ccc;
+    border-top: 5px solid #333;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    margin-bottom: 20px;
+  }
+  @keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
   }
   .hidden {
     display: none;

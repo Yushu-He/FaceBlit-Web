@@ -9,6 +9,8 @@
   let stylesDataList: { [key: string]: any } = {};
   let selectedStyle = '';
 
+  let isWebKit = false;
+
   const WIDTH = 480;
   const HEIGHT = 640;
 
@@ -23,6 +25,9 @@
   export let styleSelected: (styleName: string, styleData: any) => void = () => {};
 
   onMount(async () => {
+    const ua = navigator.userAgent;
+    isWebKit = /WebKit/.test(ua) && !/Edge/.test(ua) && !/Chrome/.test(ua);
+    console.log('Detected WebKit:', isWebKit);
     const filesetResolver = await FilesetResolver.forVisionTasks(
       'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm'
     );
@@ -37,7 +42,9 @@
     });
 
     await Promise.all(stylesListFull.map(async (styleName) => {
-      await loadSingleStyle(styleName);
+      if (!isWebKit) {
+        await loadSingleStyle(styleName);
+      }
     }));
     stylesLoaded(await loadStyles());
   });
@@ -52,7 +59,9 @@
         if (!await addSingleStyle(styleName)) {
           allFinished = false;
         }
-        await loadSingleStyle(styleName);
+        if (!isWebKit) {
+          await loadSingleStyle(styleName);
+        }
       }
     }));
     return allFinished;
@@ -78,14 +87,26 @@
       if (results.faceLandmarks && results.faceLandmarks.length > 0) {
         const landmarks = mp2dlib.transformLandmarks(results.faceLandmarks);
         const landmarksArray = transformLandmarksToInt32Array(landmarks[0]);
-        console.log('landmarksArray:', landmarksArray);
+        // console.log('landmarksArray:', landmarksArray);
 
         const resizedBlob = await ImageDataToBlob(ImageData, 'image/png');
-        await db.saveStyleData(styleName, {
-          resizedImage: resizedBlob,
-          lookUpCube: lutArray.buffer,
-          landmarksArray: landmarksArray.buffer,
-        });
+
+         if (isWebKit) {
+          // Directly store in memory since IndexedDB is not available in WebKit
+          const data = {
+            resizedImage: ImageData,
+            lookUpCube: lutArray,
+            landmarksArray: landmarksArray
+          };
+          console.log('Data loaded direct to memory', styleName, data);
+          stylesDataList[styleName] = data;
+        } else {
+          await db.saveStyleData(styleName, {
+            resizedImage: resizedBlob,
+            lookUpCube: lutArray.buffer,
+            landmarksArray: landmarksArray.buffer,
+          });
+       }
       } else {
         console.error('No landmarks detected.');
         return false;
@@ -100,6 +121,9 @@
   }
 
   async function loadSingleStyle(styleName: string) {
+    if (isWebKit) {
+      return;
+    }
     try {
       const data = await db.loadStyleData(styleName);
       if (data) {
@@ -123,7 +147,7 @@
       }
       const arrayBuffer = await response.arrayBuffer();
       const data = new Uint16Array(arrayBuffer);
-      console.log('Data for', styleName, data);
+      // console.log('Data for', styleName, data);
       return data;
     } catch (error) {
       console.error(`Error loading lookup cube: ${error.message}`);
@@ -188,7 +212,7 @@
     if (!stylesDataList[styleName]) {
       loadingStates[styleName] = true;
       const success = await addSingleStyle(styleName);
-      if (success) {
+      if (success && !isWebKit) {
         await loadSingleStyle(styleName);
       }
       loadingStates[styleName] = false;

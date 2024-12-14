@@ -36,6 +36,8 @@ This project brings [Face Blit](https://github.com/AnetaTexler/FaceBlit) to a we
 
 In the main branch, there is a TypeScript native version, but due to time constraints, it is only partially completed and has low performance.
 
+This project uses IndexedDB to cache the large lookup table after loading to improve page loading speed. However, due to Apple's limitations on the storage space of IndexedDB, this feature does not work on the WebKit engine.
+
 ## Conclusion
 
 This project was developed as the final project for the University of Michigan EECS442 course.
