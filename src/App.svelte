@@ -261,7 +261,7 @@
     <p><a href="https://github.com/Yushu-He/FaceBlit-Web" target="_blank" class="github-link" style="text-decoration: none; color: inherit;">
       <i class="fa fa-github" style="font-size: 24px; margin-right: 8px;"></i> View on GitHub
     </a></p>
-    <video bind:this={videoElement} style="display: none;" aria-hidden="true"></video>
+    <video bind:this={videoElement} playsinline autoplay muted style="display: none;" aria-hidden="true"></video>
     <canvas bind:this={canvasElement}></canvas>
     <h1>Styles</h1>
     <Styles 
